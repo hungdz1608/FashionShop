@@ -59,6 +59,9 @@ namespace FashionShop.GUI
             btnExit.Click += (s, e) => Application.Exit();
 
             Controls.AddRange(new Control[] { lblTitle, lblUser, lblPass, txtUser, txtPass, btnLogin, btnExit });
+
+            AcceptButton = btnLogin; 
+            CancelButton = btnExit;  
         }
 
         private void BtnLogin_Click(object sender, EventArgs e)

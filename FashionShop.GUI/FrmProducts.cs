@@ -13,101 +13,259 @@ namespace FashionShop.GUI
         private Account current;
 
         DataGridView dgv;
-        TextBox txtCode, txtName, txtPrice, txtStock, txtSize, txtColor, txtSearch;
+
+        TextBox txtCode, txtName, txtSize, txtColor, txtSearch;
         ComboBox cboCategory, cboGender;
+        NumericUpDown nudPrice, nudStock;
 
-        Button btnAdd, btnUpd, btnDel, btnReload;
+        Button btnAdd, btnUpd, btnDel, btnReload, btnSearch;
 
-        // ===== ctor nhận Account =====
         public FrmProducts(Account acc)
         {
             current = acc;
 
+            // ===== Form base =====
             Text = "Products Management";
-            Size = new Size(1000, 600);
+            MinimumSize = new Size(1100, 650);
             StartPosition = FormStartPosition.CenterScreen;
+            BackColor = Color.White;
+            Font = new Font("Segoe UI", 10f);
 
-            // ====== Left panel (input) ======
-            var panel = new Panel { Dock = DockStyle.Left, Width = 320, Padding = new Padding(10) };
+            // ===== Root SplitContainer =====
+            var split = new SplitContainer
+            {
+                Dock = DockStyle.Fill,
+                FixedPanel = FixedPanel.None,
+                BackColor = Color.White
+            };
+            Controls.Add(split);
 
-            int y = 20;
-            panel.Controls.Add(MakeLabel("Code", 10, y));
-            txtCode = MakeTextBox(110, y); panel.Controls.Add(txtCode); y += 40;
 
-            panel.Controls.Add(MakeLabel("Name", 10, y));
-            txtName = MakeTextBox(110, y); panel.Controls.Add(txtName); y += 40;
 
-            panel.Controls.Add(MakeLabel("Category", 10, y));
-            cboCategory = new ComboBox { Location = new Point(110, y), Width = 180, DropDownStyle = ComboBoxStyle.DropDownList };
-            panel.Controls.Add(cboCategory); y += 40;
 
-            panel.Controls.Add(MakeLabel("Gender", 10, y));
-            cboGender = new ComboBox { Location = new Point(110, y), Width = 180, DropDownStyle = ComboBoxStyle.DropDownList };
+            // ================= LEFT: Input =================
+            split.Panel1.Padding = new Padding(12);
+
+            var gbInput = new GroupBox
+            {
+                Text = "Product Information",
+                Dock = DockStyle.Fill,
+                Font = new Font("Segoe UI Semibold", 10.5f),
+                Padding = new Padding(12)
+            };
+
+            var tbl = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                AutoSize = false,
+                ColumnCount = 2,
+                RowCount = 0,
+                Padding = new Padding(6),
+            };
+
+            tbl.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110)); // label rộng cố định
+            tbl.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));  // input fill
+
+
+            // row helper
+            int _row = 0;
+            void AddRow(string label, Control control)
+            {
+                tbl.RowCount = _row + 1; // <<< tăng số row thật sự
+
+                tbl.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+
+                var lb = new Label
+                {
+                    Text = label,
+                    AutoSize = false,
+                    Dock = DockStyle.Fill,
+                    TextAlign = ContentAlignment.MiddleLeft
+                };
+
+                control.Dock = DockStyle.Fill;
+                control.Margin = new Padding(0, 2, 0, 2);
+
+                tbl.Controls.Add(lb, 0, _row);
+                tbl.Controls.Add(control, 1, _row);
+
+                _row++;
+            }
+
+            txtCode = new TextBox();
+            txtName = new TextBox();
+
+            cboCategory = new ComboBox
+            {
+                DropDownStyle = ComboBoxStyle.DropDownList
+            };
+
+            cboGender = new ComboBox
+            {
+                DropDownStyle = ComboBoxStyle.DropDownList
+            };
             cboGender.Items.AddRange(new object[] { "Men", "Women", "Unisex" });
             cboGender.SelectedIndex = 0;
-            panel.Controls.Add(cboGender); y += 40;
 
-            panel.Controls.Add(MakeLabel("Size", 10, y));
-            txtSize = MakeTextBox(110, y); panel.Controls.Add(txtSize); y += 40;
+            txtSize = new TextBox();
+            txtColor = new TextBox();
 
-            panel.Controls.Add(MakeLabel("Color", 10, y));
-            txtColor = MakeTextBox(110, y); panel.Controls.Add(txtColor); y += 40;
+            nudPrice = new NumericUpDown
+            {
+                Maximum = 1000000000,
+                DecimalPlaces = 0,
+                ThousandsSeparator = true
+            };
 
-            panel.Controls.Add(MakeLabel("Price", 10, y));
-            txtPrice = MakeTextBox(110, y); panel.Controls.Add(txtPrice); y += 40;
+            nudStock = new NumericUpDown
+            {
+                Maximum = 1000000,
+                DecimalPlaces = 0,
+                ThousandsSeparator = true
+            };
 
-            panel.Controls.Add(MakeLabel("Stock", 10, y));
-            txtStock = MakeTextBox(110, y); panel.Controls.Add(txtStock); y += 50;
+            AddRow("Code", txtCode);
+            AddRow("Name", txtName);
+            AddRow("Category", cboCategory);
+            AddRow("Gender", cboGender);
+            AddRow("Size", txtSize);
+            AddRow("Color", txtColor);
+            AddRow("Price", nudPrice);
+            AddRow("Stock", nudStock);
 
-            // ====== buttons (DÙNG FIELD) ======
-            btnAdd = MakeButton("Add", 10, y);
-            btnUpd = MakeButton("Update", 110, y);
-            btnDel = MakeButton("Delete", 210, y);
-            y += 45;
-            btnReload = MakeButton("Reload", 10, y);
+            // Buttons panel
+            var pnlButtons = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Bottom,
+                FlowDirection = FlowDirection.LeftToRight,
+                Height = 90,
+                Padding = new Padding(0, 10, 0, 0)
+            };
+
+            btnAdd = MakeButton("Add", Color.FromArgb(33, 150, 243));
+            btnUpd = MakeButton("Update", Color.FromArgb(76, 175, 80));
+            btnDel = MakeButton("Delete", Color.FromArgb(244, 67, 54));
+            btnReload = MakeButton("Reload", Color.FromArgb(96, 125, 139));
 
             btnAdd.Click += BtnAdd_Click;
             btnUpd.Click += BtnUpd_Click;
             btnDel.Click += BtnDel_Click;
             btnReload.Click += (s, e) => LoadGrid();
 
-            panel.Controls.AddRange(new Control[] { btnAdd, btnUpd, btnDel, btnReload });
+            pnlButtons.Controls.AddRange(new Control[] { btnAdd, btnUpd, btnDel, btnReload });
 
-            // ====== Right (grid + search) ======
+            gbInput.Controls.Add(tbl);
+            gbInput.Controls.Add(pnlButtons);
+
+            split.Panel1.Controls.Add(gbInput);
+
+            // ================= RIGHT: Search + Grid =================
+            split.Panel2.Padding = new Padding(12);
+
+            var pnlSearch = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = 46
+            };
+
+            txtSearch = new TextBox
+            {
+                Width = 350,
+                Anchor = AnchorStyles.Left | AnchorStyles.Top
+            };
+
+            btnSearch = MakeButton("Search", Color.FromArgb(63, 81, 181));
+            btnSearch.Width = 100;
+            btnSearch.Height = 34;
+            btnSearch.Margin = new Padding(8, 0, 0, 0);
+
+            btnSearch.Click += (s, e) =>
+                dgv.DataSource = service.Search(txtSearch.Text.Trim());
+
+            pnlSearch.Controls.Add(txtSearch);
+            pnlSearch.Controls.Add(btnSearch);
+            txtSearch.Location = new Point(0, 8);
+            btnSearch.Location = new Point(txtSearch.Right + 8, 6);
+
             dgv = new DataGridView
             {
                 Dock = DockStyle.Fill,
                 ReadOnly = true,
                 AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
-                SelectionMode = DataGridViewSelectionMode.FullRowSelect
+                SelectionMode = DataGridViewSelectionMode.FullRowSelect,
+                MultiSelect = false,
+                RowHeadersVisible = false,
+                AllowUserToAddRows = false,
+                BackgroundColor = Color.White,
+                BorderStyle = BorderStyle.FixedSingle,
             };
             dgv.CellClick += Dgv_CellClick;
 
-            var topSearch = new Panel { Dock = DockStyle.Top, Height = 40, Padding = new Padding(8) };
-            txtSearch = new TextBox { Width = 260, Location = new Point(8, 8) };
-            var btnSearch = new Button { Text = "Search", Location = new Point(280, 6), Width = 80 };
-            btnSearch.Click += (s, e) => dgv.DataSource = service.Search(txtSearch.Text.Trim());
-            topSearch.Controls.AddRange(new Control[] { txtSearch, btnSearch });
+            StyleGrid(dgv);
 
-            Controls.Add(dgv);
-            Controls.Add(topSearch);
-            Controls.Add(panel);
+            split.Panel2.Controls.Add(dgv);
+            split.Panel2.Controls.Add(pnlSearch);
 
+            Shown += (s, e) =>
+            {
+                split.Panel1MinSize = 320;
+                split.Panel2MinSize = 600;
+
+                // đảm bảo splitter distance hợp lệ theo width hiện tại
+                int desiredLeft = 340;
+                int maxLeft = split.Width - split.Panel2MinSize;
+
+                split.SplitterDistance = Math.Max(split.Panel1MinSize,
+                                          Math.Min(desiredLeft, maxLeft));
+            };
+
+
+            // ===== Load data =====
             Load += (s, e) =>
             {
                 cboCategory.DataSource = service.GetCategories();
                 cboCategory.DisplayMember = "category_name";
                 cboCategory.ValueMember = "category_id";
-                LoadGrid();
 
-                ApplyRolePermission(); // <--- gọi sau khi UI tạo xong
+                LoadGrid();
+                ApplyRolePermission();
             };
         }
 
-        // ===== ctor mặc định (nếu mở form không truyền account) =====
         public FrmProducts() : this(null) { }
 
-        // ====== khóa quyền staff ======
+        // ================= UI STYLE HELPERS =================
+        Button MakeButton(string text, Color backColor)
+        {
+            return new Button
+            {
+                Text = text,
+                BackColor = backColor,
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Height = 38,
+                Width = 95,
+                Font = new Font("Segoe UI Semibold", 10f),
+                Cursor = Cursors.Hand,
+                Margin = new Padding(6, 0, 6, 0)
+            };
+        }
+
+        void StyleGrid(DataGridView g)
+        {
+            g.EnableHeadersVisualStyles = false;
+            g.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(245, 245, 245);
+            g.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI Semibold", 10f);
+            g.ColumnHeadersDefaultCellStyle.ForeColor = Color.Black;
+            g.ColumnHeadersHeight = 38;
+
+            g.DefaultCellStyle.Font = new Font("Segoe UI", 10f);
+            g.DefaultCellStyle.SelectionBackColor = Color.FromArgb(33, 150, 243);
+            g.DefaultCellStyle.SelectionForeColor = Color.White;
+            g.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(250, 250, 250);
+        }
+
+        // ================= PERMISSION =================
         private void ApplyRolePermission()
         {
             if (current == null) return;
@@ -117,18 +275,16 @@ namespace FashionShop.GUI
 
             if (isStaff)
             {
-                // không cho thêm/sửa/xóa
                 btnAdd.Enabled = false;
                 btnUpd.Enabled = false;
                 btnDel.Enabled = false;
 
-                // khóa luôn input để staff chỉ xem
                 txtCode.ReadOnly = true;
                 txtName.ReadOnly = true;
                 txtSize.ReadOnly = true;
                 txtColor.ReadOnly = true;
-                txtPrice.ReadOnly = true;
-                txtStock.ReadOnly = true;
+                nudPrice.Enabled = false;
+                nudStock.Enabled = false;
                 cboCategory.Enabled = false;
                 cboGender.Enabled = false;
 
@@ -148,20 +304,28 @@ namespace FashionShop.GUI
                 Gender = cboGender.Text,
                 Size = txtSize.Text.Trim(),
                 Color = txtColor.Text.Trim(),
-                Price = decimal.Parse(txtPrice.Text.Trim()),
-                Stock = int.Parse(txtStock.Text.Trim())
+                Price = nudPrice.Value,
+                Stock = (int)nudStock.Value
             };
         }
 
+        // ================= ACTIONS =================
         private void BtnAdd_Click(object sender, EventArgs e)
         {
             try
             {
                 var p = ReadForm();
-                if (service.Add(p, out string err)) { MessageBox.Show("Added!"); LoadGrid(); }
+                if (service.Add(p, out string err))
+                {
+                    MessageBox.Show("Added!");
+                    LoadGrid();
+                }
                 else MessageBox.Show(err);
             }
-            catch (Exception ex) { MessageBox.Show("Invalid data: " + ex.Message); }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Invalid data: " + ex.Message);
+            }
         }
 
         private void BtnUpd_Click(object sender, EventArgs e)
@@ -169,10 +333,17 @@ namespace FashionShop.GUI
             try
             {
                 var p = ReadForm();
-                if (service.Update(p, out string err)) { MessageBox.Show("Updated!"); LoadGrid(); }
+                if (service.Update(p, out string err))
+                {
+                    MessageBox.Show("Updated!");
+                    LoadGrid();
+                }
                 else MessageBox.Show(err);
             }
-            catch (Exception ex) { MessageBox.Show("Invalid data: " + ex.Message); }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Invalid data: " + ex.Message);
+            }
         }
 
         private void BtnDel_Click(object sender, EventArgs e)
@@ -190,23 +361,18 @@ namespace FashionShop.GUI
         {
             if (e.RowIndex < 0) return;
             var r = dgv.Rows[e.RowIndex];
-            txtCode.Text = r.Cells["product_code"].Value.ToString();
-            txtName.Text = r.Cells["product_name"].Value.ToString();
+
+            txtCode.Text = r.Cells["product_code"].Value?.ToString();
+            txtName.Text = r.Cells["product_name"].Value?.ToString();
             txtSize.Text = r.Cells["size"].Value?.ToString();
             txtColor.Text = r.Cells["color"].Value?.ToString();
             cboGender.Text = r.Cells["gender"].Value?.ToString();
-            txtPrice.Text = r.Cells["price"].Value.ToString();
-            txtStock.Text = r.Cells["stock"].Value.ToString();
+
+            if (decimal.TryParse(r.Cells["price"].Value?.ToString(), out var price))
+                nudPrice.Value = Math.Min(nudPrice.Maximum, price);
+
+            if (int.TryParse(r.Cells["stock"].Value?.ToString(), out var stock))
+                nudStock.Value = Math.Min(nudStock.Maximum, stock);
         }
-
-        // UI helpers
-        Label MakeLabel(string t, int x, int y) =>
-            new Label { Text = t + ":", Location = new Point(x, y + 5), AutoSize = true };
-
-        TextBox MakeTextBox(int x, int y) =>
-            new TextBox { Location = new Point(x, y), Width = 180 };
-
-        Button MakeButton(string t, int x, int y) =>
-            new Button { Text = t, Location = new Point(x, y), Width = 90 };
     }
 }
