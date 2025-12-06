@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Data;
 using System.Drawing;
+using System.Linq;
 using System.Windows.Forms;
 using FashionShop.BLL;
 using FashionShop.DTO;
@@ -14,6 +16,13 @@ namespace FashionShop.GUI
 
         TextBox txtId, txtName, txtPhone, txtEmail, txtAddress, txtPoints, txtSearch;
         Button btnAdd, btnUpd, btnDel, btnReload, btnSearch;
+
+        // ===== search helpers (copy từ FrmProducts) =====
+        private DataTable customersTable;   // bảng gốc
+        private DataView customersView;     // view để filter
+        private string colId;
+        private string colName;
+        private readonly string hintSearch = "Search by id / name / phone / email...";
 
         public FrmCustomers()
         {
@@ -152,64 +161,89 @@ namespace FashionShop.GUI
             // ================= RIGHT: Search + Grid =================
             split.Panel2.Padding = new Padding(12);
 
+            // ===== Search bar giống FrmProducts =====
             var pnlSearch = new TableLayoutPanel
             {
                 Dock = DockStyle.Top,
-                Height = 50,
+                Height = 43,
                 ColumnCount = 2,
-                RowCount = 1,
                 Padding = new Padding(0),
+                Margin = new Padding(0)
             };
-            pnlSearch.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 80));
-            pnlSearch.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20));
+
+            pnlSearch.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            pnlSearch.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 46));
 
             txtSearch = new TextBox
             {
+                Height = 45,
                 Dock = DockStyle.Fill,
-                Multiline = false,
-                Height = 50,
-                Margin = new Padding(0, 6, 8, 6),
-                Font = new Font("Segoe UI", 12f)
+                Font = new Font("Segoe UI", 12f),
+                Margin = new Padding(0, 6, 4, 6)
             };
 
-            btnSearch = MakeButton("Search", Color.FromArgb(63, 81, 181));
+            // nút clear (bạn có thể đổi màu/ảnh tùy ý)
+            btnSearch = MakeButton("", Color.FromArgb(244, 67, 54));
             btnSearch.Dock = DockStyle.Fill;
             btnSearch.Margin = new Padding(0, 6, 0, 6);
-
-            pnlSearch.Layout += (s, e) =>
-            {
-                int hTxt = txtSearch.PreferredHeight;
-                int pad = Math.Max(0, (pnlSearch.Height - hTxt) / 2);
-                txtSearch.Margin = new Padding(0, pad, 8, pad);
-                btnSearch.Margin = new Padding(0, pad, 0, pad);
-            };
 
             pnlSearch.Controls.Add(txtSearch, 0, 0);
             pnlSearch.Controls.Add(btnSearch, 1, 0);
 
-            // placeholder giả
-            string hint = "Search by name / phone / email...";
-            txtSearch.Text = hint;
+            btnSearch.Image = ResizeImage(Properties.Resources.delete, 18, 18);
+            btnSearch.ImageAlign = ContentAlignment.MiddleCenter;
+            btnSearch.TextImageRelation = TextImageRelation.Overlay;
+            btnSearch.Padding = new Padding(0);
+
+            // Placeholder
+            txtSearch.Text = hintSearch;
             txtSearch.ForeColor = Color.Gray;
 
             txtSearch.GotFocus += (s, e) =>
             {
-                if (txtSearch.Text == hint)
+                if (txtSearch.Text == hintSearch)
                 {
                     txtSearch.Text = "";
                     txtSearch.ForeColor = Color.Black;
                 }
             };
+
             txtSearch.LostFocus += (s, e) =>
             {
                 if (string.IsNullOrWhiteSpace(txtSearch.Text))
                 {
-                    txtSearch.Text = hint;
+                    txtSearch.Text = hintSearch;
                     txtSearch.ForeColor = Color.Gray;
                 }
             };
 
-            // Grid
+            // Click nút đỏ: clear + show full list
+            btnSearch.Click += (s, e) =>
+            {
+                txtSearch.Text = hintSearch;
+                txtSearch.ForeColor = Color.Gray;
+
+                if (customersView != null)
+                    customersView.RowFilter = "";
+            };
+
+            // live search khi gõ
+            txtSearch.TextChanged += (s, e) =>
+            {
+                if (txtSearch.Focused) ApplySearch();
+            };
+
+            // Enter để search luôn
+            txtSearch.KeyDown += (s, e) =>
+            {
+                if (e.KeyCode == Keys.Enter)
+                {
+                    e.SuppressKeyPress = true;
+                    ApplySearch();
+                }
+            };
+
+            // ===== Grid =====
             dgv = new DataGridView
             {
                 Dock = DockStyle.Fill,
@@ -240,7 +274,8 @@ namespace FashionShop.GUI
                                           Math.Min(desiredLeft, maxLeft));
             };
 
-            // ===== Events giữ logic cũ =====
+            // ================= ACTION EVENTS (giữ logic cũ) =================
+
             btnAdd.Click += (s, e) =>
             {
                 var c = ReadForm();
@@ -276,17 +311,108 @@ namespace FashionShop.GUI
                 }
             };
 
-            btnReload.Click += (s, e) => { LoadGrid(); ClearForm(); };
-
-            btnSearch.Click += (s, e) =>
+            btnReload.Click += (s, e) =>
             {
-                var key = txtSearch.Text.Trim();
-                if (key == hint) key = "";
-                dgv.DataSource = service.Search(key);
+                LoadGrid();
+                ClearForm();
             };
 
             // load data
             Load += (s, e) => LoadGrid();
+        }
+
+        // ================= SEARCH CORE =================
+
+        private void ReloadCustomers()
+        {
+            customersTable = service.GetAll();   // GetAll trả DataTable
+            ResolveCustomerColumns();
+
+            customersView = customersTable.DefaultView;
+            dgv.DataSource = customersView;
+
+            SetupAutoComplete();
+            ApplySearch();
+        }
+
+        private void ResolveCustomerColumns()
+        {
+            if (customersTable == null) return;
+
+            string[] idCandidates = { "customer_id", "CustomerId", "id", "customerId" };
+            string[] nameCandidates = { "customer_name", "CustomerName", "name", "customerName" };
+
+            colId = customersTable.Columns
+                .Cast<DataColumn>()
+                .Select(c => c.ColumnName)
+                .FirstOrDefault(n => idCandidates.Contains(n));
+
+            colName = customersTable.Columns
+                .Cast<DataColumn>()
+                .Select(c => c.ColumnName)
+                .FirstOrDefault(n => nameCandidates.Contains(n));
+        }
+
+        private void ApplySearch()
+        {
+            if (customersView == null) return;
+
+            var key = txtSearch.Text.Trim();
+            if (key == hintSearch) key = "";
+            customersView.RowFilter = "";
+
+            if (!string.IsNullOrWhiteSpace(key))
+            {
+                key = key.Replace("'", "''");
+
+                // các cột muốn search
+                string[] cols = {
+                    "customer_id",
+                    "customer_name",
+                    "phone",
+                    "email",
+                    "address",
+                    "points"
+                };
+
+                // chỉ lấy những cột thật sự tồn tại trong DataTable
+                var realCols = cols
+                    .Where(c => customersTable.Columns.Contains(c))
+                    .Select(c => $"CONVERT([{c}], 'System.String') LIKE '%{key}%'");
+
+                customersView.RowFilter = string.Join(" OR ", realCols);
+            }
+        }
+
+        private void SetupAutoComplete()
+        {
+            if (customersTable == null) return;
+
+            var src = new AutoCompleteStringCollection();
+
+            if (!string.IsNullOrEmpty(colId))
+            {
+                var ids = customersTable.AsEnumerable()
+                    .Select(r => r[colId]?.ToString())
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Distinct()
+                    .ToArray();
+                src.AddRange(ids);
+            }
+
+            if (!string.IsNullOrEmpty(colName))
+            {
+                var names = customersTable.AsEnumerable()
+                    .Select(r => r[colName]?.ToString())
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Distinct()
+                    .ToArray();
+                src.AddRange(names);
+            }
+
+            txtSearch.AutoCompleteMode = AutoCompleteMode.SuggestAppend;
+            txtSearch.AutoCompleteSource = AutoCompleteSource.CustomSource;
+            txtSearch.AutoCompleteCustomSource = src;
         }
 
         // ================= UI STYLE HELPERS =================
@@ -311,7 +437,16 @@ namespace FashionShop.GUI
             g.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(245, 245, 245);
             g.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI Semibold", 10f);
             g.ColumnHeadersDefaultCellStyle.ForeColor = Color.Black;
-            g.ColumnHeadersHeight = 38;
+
+            // ===== FIX CỨNG Ô =====
+            g.AllowUserToResizeColumns = false;
+            g.AllowUserToResizeRows = false;
+            g.RowHeadersWidthSizeMode = DataGridViewRowHeadersWidthSizeMode.DisableResizing;
+            g.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
+
+            g.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.None;
+            g.RowTemplate.Height = 32;     // chiều cao dòng cố định
+            g.ColumnHeadersHeight = 38;    // header cố định
 
             g.DefaultCellStyle.Font = new Font("Segoe UI", 10f);
             g.DefaultCellStyle.SelectionBackColor = Color.FromArgb(33, 150, 243);
@@ -319,8 +454,23 @@ namespace FashionShop.GUI
             g.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(250, 250, 250);
         }
 
+        // optional: resize icon nếu bạn dùng icon nút đỏ
+        private Image ResizeImage(Image img, int w, int h)
+        {
+            var bmp = new Bitmap(w, h);
+            using (var g = Graphics.FromImage(bmp))
+            {
+                g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighQuality;
+                g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+                g.DrawImage(img, 0, 0, w, h);
+            }
+            return bmp;
+        }
+
         // ================= DATA/FORM =================
-        void LoadGrid() => dgv.DataSource = service.GetAll();
+        // LoadGrid giờ gọi ReloadCustomers giống Products
+        void LoadGrid() => ReloadCustomers();
 
         Customer ReadForm()
         {

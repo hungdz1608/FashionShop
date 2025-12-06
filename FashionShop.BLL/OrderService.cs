@@ -2,6 +2,7 @@
 using FashionShop.DTO;
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
 
 namespace FashionShop.BLL
@@ -34,5 +35,42 @@ namespace FashionShop.BLL
             }
         }
 
+        // ====== CHART METHODS ======
+
+        public DataTable GetRevenueByDayInMonth()
+        {
+            try
+            {
+                return repo.GetRevenueByDayInMonth();
+            }
+            catch
+            {
+                return new DataTable();
+            }
+        }
+
+        public DataTable GetTopProductsInMonth(int top)
+        {
+            try
+            {
+                return repo.GetTopProductsInMonth(top);
+            }
+            catch
+            {
+                return new DataTable();
+            }
+        }
+
+        public DataTable GetRevenueByCategoryInMonth()
+        {
+            try
+            {
+                return repo.GetRevenueByCategoryInMonth();
+            }
+            catch
+            {
+                return new DataTable();
+            }
+        }
     }
 }

@@ -1,4 +1,5 @@
-﻿using FashionShop.DTO;
+﻿using System.Data;
+using FashionShop.DTO;
 using MySql.Data.MySqlClient;
 using System;
 using System.Collections.Generic;
@@ -73,5 +74,90 @@ namespace FashionShop.DAL
                 return Convert.ToDecimal(result);
             }
         }
+
+
+        // 1) Doanh thu theo ngày trong tháng hiện tại
+        public DataTable GetRevenueByDayInMonth()
+        {
+            var dt = new DataTable();
+            using (var conn = DbContext.GetConnection())
+            {
+                conn.Open();
+                string sql = @"
+            SELECT DAY(o.order_date) AS day,
+                   IFNULL(SUM(od.quantity * od.unit_price), 0) AS revenue
+            FROM orders o
+            JOIN order_details od ON o.order_id = od.order_id
+            WHERE MONTH(o.order_date) = MONTH(CURDATE())
+              AND YEAR(o.order_date) = YEAR(CURDATE())
+            GROUP BY DAY(o.order_date)
+            ORDER BY day;";
+
+                using (var da = new MySqlDataAdapter(sql, conn))
+                {
+                    da.Fill(dt);
+                }
+            }
+            return dt;
+        }
+
+        // 2) Top sản phẩm bán chạy trong tháng
+        public DataTable GetTopProductsInMonth(int top)
+        {
+            var dt = new DataTable();
+            using (var conn = DbContext.GetConnection())
+            {
+                conn.Open();
+                string sql = @"
+            SELECT p.product_name,
+                   IFNULL(SUM(od.quantity), 0) AS qty
+            FROM order_details od
+            JOIN orders o ON o.order_id = od.order_id
+            JOIN products p ON p.product_id = od.product_id
+            WHERE MONTH(o.order_date) = MONTH(CURDATE())
+              AND YEAR(o.order_date) = YEAR(CURDATE())
+            GROUP BY p.product_id, p.product_name
+            ORDER BY qty DESC
+            LIMIT @top;";
+
+                using (var cmd = new MySqlCommand(sql, conn))
+                {
+                    cmd.Parameters.AddWithValue("@top", top);
+                    using (var da = new MySqlDataAdapter(cmd))
+                    {
+                        da.Fill(dt);
+                    }
+                }
+            }
+            return dt;
+        }
+
+        // 3) Doanh thu theo category trong tháng
+        public DataTable GetRevenueByCategoryInMonth()
+        {
+            var dt = new DataTable();
+            using (var conn = DbContext.GetConnection())
+            {
+                conn.Open();
+                string sql = @"
+            SELECT c.category_name,
+                   IFNULL(SUM(od.quantity * od.unit_price), 0) AS revenue
+            FROM order_details od
+            JOIN orders o ON o.order_id = od.order_id
+            JOIN products p ON p.product_id = od.product_id
+            JOIN categories c ON c.category_id = p.category_id
+            WHERE MONTH(o.order_date) = MONTH(CURDATE())
+              AND YEAR(o.order_date) = YEAR(CURDATE())
+            GROUP BY c.category_id, c.category_name
+            ORDER BY revenue DESC;";
+
+                using (var da = new MySqlDataAdapter(sql, conn))
+                {
+                    da.Fill(dt);
+                }
+            }
+            return dt;
+        }
+
     }
 }

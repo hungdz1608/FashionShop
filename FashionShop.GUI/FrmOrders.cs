@@ -27,6 +27,24 @@ namespace FashionShop.GUI
         private DataTable productsTable;     // bảng gốc
         private DataView productsView;       // view để search
 
+        // ===== search helpers =====
+        private string colCode;
+        private string colName;
+        private readonly string hint = "Enter product name...";
+
+        private Image ResizeImage(Image img, int w, int h)
+        {
+            var bmp = new Bitmap(w, h);
+            using (var g = Graphics.FromImage(bmp))
+            {
+                g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighQuality;
+                g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+                g.DrawImage(img, 0, 0, w, h);
+            }
+            return bmp;
+        }
+
         public FrmOrders(Account acc)
         {
             current = acc;
@@ -61,32 +79,46 @@ namespace FashionShop.GUI
             };
             split.Panel1.Controls.Add(gbProducts);
 
+
             // Search bar
             var pnlSearch = new TableLayoutPanel
             {
                 Dock = DockStyle.Top,
-                Height = 46,
-                ColumnCount = 2
+                Height = 43,
+                ColumnCount = 2,
+                Padding = new Padding(0),
+                Margin = new Padding(0)
             };
-            pnlSearch.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 80));
-            pnlSearch.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20));
+
+            pnlSearch.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            pnlSearch.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 46));
 
             txtSearch = new TextBox
             {
+                Height = 45,
                 Dock = DockStyle.Fill,
                 Font = new Font("Segoe UI", 12f),
-                Margin = new Padding(0, 6, 8, 6)
+
+                // GIẢM margin phải để cân với nút đỏ
+                Margin = new Padding(0, 6, 4, 6)
             };
 
-            btnSearch = MakeButton("Search", Color.FromArgb(63, 81, 181));
+            btnSearch = MakeButton("", Color.FromArgb(244, 67, 54));
             btnSearch.Dock = DockStyle.Fill;
             btnSearch.Margin = new Padding(0, 6, 0, 6);
 
+            // add vào layout
             pnlSearch.Controls.Add(txtSearch, 0, 0);
             pnlSearch.Controls.Add(btnSearch, 1, 0);
 
+            // icon trong nút đỏ: CANH GIỮA cho cân dọc
+            btnSearch.Image = ResizeImage(Properties.Resources.delete, 18, 18);
+            btnSearch.ImageAlign = ContentAlignment.MiddleCenter;
+            btnSearch.TextImageRelation = TextImageRelation.Overlay;
+            btnSearch.Padding = new Padding(0);
+
+
             // Placeholder
-            string hint = "Enter product code or name...";
             txtSearch.Text = hint;
             txtSearch.ForeColor = Color.Gray;
 
@@ -107,25 +139,31 @@ namespace FashionShop.GUI
                 }
             };
 
-            btnSearch.Click += (s, e) =>
+            // ===== Events search mới =====
+            btnSearch.Click += (s, e) => {
+                // xóa text, trả về hint
+                txtSearch.Text = hint;
+                txtSearch.ForeColor = Color.Gray;
+
+                // reset filter & hiện full list
+                if (productsView != null)
+                    productsView.RowFilter = "";
+            };
+
+            // live search khi gõ
+            txtSearch.TextChanged += (s, e) =>
             {
-                if (productsView == null) return;
+                if (txtSearch.Focused) ApplySearch();
+            };
 
-                var key = txtSearch.Text.Trim();
-                if (key == hint) key = "";
-
-                // reset filter trước
-                productsView.RowFilter = "";
-
-                if (!string.IsNullOrWhiteSpace(key))
+            // Enter để search luôn
+            txtSearch.KeyDown += (s, e) =>
+            {
+                if (e.KeyCode == Keys.Enter)
                 {
-                    key = key.Replace("'", "''");
-                    productsView.RowFilter =
-                    $"[product_code] LIKE '%{key}%' OR [product_name] LIKE '%{key}%'";
-
+                    e.SuppressKeyPress = true;
+                    ApplySearch();
                 }
-
-                dgvProducts.DataSource = productsView.ToTable();
             };
 
             // Grid products
@@ -148,7 +186,7 @@ namespace FashionShop.GUI
             {
                 Dock = DockStyle.Bottom,
                 Height = 60,
-                Padding = new Padding(0, 8, 0, 0),
+                Padding = new Padding(0, 20, 0, 0),
                 BackColor = Color.Transparent
             };
 
@@ -256,7 +294,7 @@ namespace FashionShop.GUI
             var btnGrid = new TableLayoutPanel
             {
                 Dock = DockStyle.Bottom,
-                Height = 70,
+                Height = 65,
                 ColumnCount = 2,
                 RowCount = 1,
                 Padding = new Padding(0, 10, 0, 0)
@@ -296,10 +334,7 @@ namespace FashionShop.GUI
             // Load data
             Load += (s, e) =>
             {
-                productsTable = productService.GetForSale();
-                productsView = productsTable.DefaultView;
-
-                dgvProducts.DataSource = productsTable;
+                ReloadProducts();
 
                 cboCustomers.DataSource = customerService.GetForCombo();
                 cboCustomers.DisplayMember = "customer_name";
@@ -308,6 +343,94 @@ namespace FashionShop.GUI
 
                 RefreshCart();
             };
+        }
+
+        // ================= SEARCH CORE =================
+
+        private void ReloadProducts()
+        {
+            productsTable = productService.GetForSale();
+            ResolveProductColumns();
+
+            productsView = productsTable.DefaultView;
+            dgvProducts.DataSource = productsView;
+
+            SetupAutoComplete();
+            ApplySearch(); // nếu đang có chữ trong ô search thì lọc lại
+        }
+
+        private void ResolveProductColumns()
+        {
+            if (productsTable == null) return;
+
+            string[] codeCandidates = { "product_code", "ProductCode", "code", "productCode" };
+            string[] nameCandidates = { "product_name", "ProductName", "name", "productName" };
+
+            colCode = productsTable.Columns
+                .Cast<DataColumn>()
+                .Select(c => c.ColumnName)
+                .FirstOrDefault(n => codeCandidates.Contains(n));
+
+            colName = productsTable.Columns
+                .Cast<DataColumn>()
+                .Select(c => c.ColumnName)
+                .FirstOrDefault(n => nameCandidates.Contains(n));
+        }
+
+        private void ApplySearch()
+        {
+            if (productsView == null) return;
+
+            var key = txtSearch.Text.Trim();
+            if (key == hint) key = "";
+
+            productsView.RowFilter = "";
+
+            if (!string.IsNullOrWhiteSpace(key))
+            {
+                key = key.Replace("'", "''");
+
+                if (!string.IsNullOrEmpty(colCode) && !string.IsNullOrEmpty(colName))
+                {
+                    productsView.RowFilter =
+                        $"[{colCode}] LIKE '%{key}%' OR [{colName}] LIKE '%{key}%'";
+                }
+                else if (!string.IsNullOrEmpty(colName))
+                {
+                    productsView.RowFilter = $"[{colName}] LIKE '%{key}%'";
+                }
+            }
+        }
+
+        private void SetupAutoComplete()
+        {
+            if (productsTable == null) return;
+
+            var src = new AutoCompleteStringCollection();
+
+            if (!string.IsNullOrEmpty(colCode))
+            {
+                var codes = productsTable.AsEnumerable()
+                    .Select(r => r[colCode]?.ToString())
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Distinct()
+                    .ToArray();
+                src.AddRange(codes);
+            }
+
+            if (!string.IsNullOrEmpty(colName))
+            {
+                var names = productsTable.AsEnumerable()
+                    .Select(r => r[colName]?.ToString())
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Distinct()
+                    .ToArray();
+                src.AddRange(names);
+            }
+
+            txtSearch.AutoCompleteMode = AutoCompleteMode.SuggestAppend;
+            txtSearch.AutoCompleteSource = AutoCompleteSource.CustomSource;
+            txtSearch.AutoCompleteCustomSource = src;
         }
 
         // ================= UI HELPERS =================
@@ -326,13 +449,22 @@ namespace FashionShop.GUI
             };
         }
 
-        private void StyleGrid(DataGridView g)
+        void StyleGrid(DataGridView g)
         {
             g.EnableHeadersVisualStyles = false;
             g.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(245, 245, 245);
             g.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI Semibold", 10f);
             g.ColumnHeadersDefaultCellStyle.ForeColor = Color.Black;
-            g.ColumnHeadersHeight = 38;
+
+            // ===== FIX CỨNG Ô =====
+            g.AllowUserToResizeColumns = false;
+            g.AllowUserToResizeRows = false;
+            g.RowHeadersWidthSizeMode = DataGridViewRowHeadersWidthSizeMode.DisableResizing;
+            g.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
+
+            g.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.None;
+            g.RowTemplate.Height = 32;     // chiều cao dòng cố định
+            g.ColumnHeadersHeight = 38;    // header cố định
 
             g.DefaultCellStyle.Font = new Font("Segoe UI", 10f);
             g.DefaultCellStyle.SelectionBackColor = Color.FromArgb(33, 150, 243);
@@ -340,7 +472,8 @@ namespace FashionShop.GUI
             g.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(250, 250, 250);
         }
 
-        // ================= LOGIC GIỮ NGUYÊN =================
+        // ================= BUSINESS LOGIC =================
+
         private void AddToCart(object sender, EventArgs e)
         {
             if (dgvProducts.CurrentRow == null) return;
@@ -423,10 +556,8 @@ namespace FashionShop.GUI
 
             cart.Clear();
 
-            // reload stock mới
-            productsTable = productService.GetForSale();
-            productsView = productsTable.DefaultView;
-            dgvProducts.DataSource = productsTable;
+            // reload stock mới + refresh autocomplete + search
+            ReloadProducts();
 
             RefreshCart();
         }

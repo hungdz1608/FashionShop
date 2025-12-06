@@ -1,5 +1,6 @@
 ﻿using FashionShop.DTO;
 using MySql.Data.MySqlClient;
+using System;
 using System.Data;
 
 namespace FashionShop.DAL
@@ -12,7 +13,8 @@ namespace FashionShop.DAL
             {
                 conn.Open();
                 string sql = @"SELECT p.product_id, p.product_code, p.product_name,
-                                      c.category_name, p.size, p.color, p.gender, p.price, p.stock
+                                      c.category_name, p.size, p.color, p.gender, 
+                                      p.price, p.stock, p.image_path        
                                FROM products p
                                JOIN categories c ON p.category_id=c.category_id
                                ORDER BY p.product_id ASC";
@@ -29,7 +31,8 @@ namespace FashionShop.DAL
             {
                 conn.Open();
                 string sql = @"SELECT p.product_id, p.product_code, p.product_name,
-                                      c.category_name, p.size, p.color, p.gender, p.price, p.stock
+                                      c.category_name, p.size, p.color, p.gender, 
+                                      p.price, p.stock, p.image_path        
                                FROM products p
                                JOIN categories c ON p.category_id=c.category_id
                                WHERE p.product_name LIKE @kw OR p.product_code LIKE @kw
@@ -59,8 +62,10 @@ namespace FashionShop.DAL
             using (var conn = DbContext.GetConnection())
             {
                 conn.Open();
-                string sql = @"INSERT INTO products(product_code,product_name,category_id,price,stock,size,color,gender)
-                               VALUES(@code,@name,@cat,@price,@stock,@size,@color,@gender)";
+                string sql = @"INSERT INTO products(product_code,product_name,category_id,
+                                                    price,stock,size,color,gender,image_path)
+                               VALUES(@code,@name,@cat,@price,@stock,@size,@color,@gender,@img)";
+
                 var cmd = new MySqlCommand(sql, conn);
                 cmd.Parameters.AddWithValue("@code", p.Code);
                 cmd.Parameters.AddWithValue("@name", p.Name);
@@ -70,6 +75,11 @@ namespace FashionShop.DAL
                 cmd.Parameters.AddWithValue("@size", p.Size);
                 cmd.Parameters.AddWithValue("@color", p.Color);
                 cmd.Parameters.AddWithValue("@gender", p.Gender);
+
+                // ✅ thêm image_path (cho phép null)
+                cmd.Parameters.AddWithValue("@img",
+                    string.IsNullOrWhiteSpace(p.ImagePath) ? (object)DBNull.Value : p.ImagePath);
+
                 return cmd.ExecuteNonQuery();
             }
         }
@@ -81,8 +91,10 @@ namespace FashionShop.DAL
                 conn.Open();
                 string sql = @"UPDATE products
                                SET product_name=@name, category_id=@cat, price=@price,
-                                   stock=@stock, size=@size, color=@color, gender=@gender
+                                   stock=@stock, size=@size, color=@color, gender=@gender,
+                                   image_path=@img                
                                WHERE product_code=@code";
+
                 var cmd = new MySqlCommand(sql, conn);
                 cmd.Parameters.AddWithValue("@code", p.Code);
                 cmd.Parameters.AddWithValue("@name", p.Name);
@@ -92,6 +104,11 @@ namespace FashionShop.DAL
                 cmd.Parameters.AddWithValue("@size", p.Size);
                 cmd.Parameters.AddWithValue("@color", p.Color);
                 cmd.Parameters.AddWithValue("@gender", p.Gender);
+
+                // ✅ thêm image_path (cho phép null)
+                cmd.Parameters.AddWithValue("@img",
+                    string.IsNullOrWhiteSpace(p.ImagePath) ? (object)DBNull.Value : p.ImagePath);
+
                 return cmd.ExecuteNonQuery();
             }
         }
@@ -126,14 +143,13 @@ namespace FashionShop.DAL
                 conn.Open();
                 var da = new MySqlDataAdapter(
                     @"SELECT product_id, product_name, price, stock
-              FROM products
-              WHERE stock > 0
-              ORDER BY product_id ASC", conn);  // ✅ bỏ p.
+                      FROM products
+                      WHERE stock > 0
+                      ORDER BY product_id ASC", conn);
                 var dt = new DataTable();
                 da.Fill(dt);
                 return dt;
             }
         }
-
     }
 }
