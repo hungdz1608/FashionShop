@@ -161,7 +161,7 @@ namespace FashionShop.GUI
                 {
                     if (!IsAdmin()) return;
                     using (var f = new FrmCategories(current))
-                    f.ShowDialog();
+                        f.ShowDialog();
                     LoadCategories(); // ✅ reload lại category sau CRUD
                 },
                 comboWidth: 200,
@@ -549,7 +549,7 @@ namespace FashionShop.GUI
             // tắt autosize để width có hiệu lực
             foreach (DataGridViewColumn col in dgv.Columns)
             {
-                col.AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
+                col.AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
             }
 
             // set width gọn gàng hơn
@@ -557,11 +557,11 @@ namespace FashionShop.GUI
             SetColWidth("product_code", 100);
             SetColWidth("product_name", 250);
             SetColWidth("category_name", 130);
-            SetColWidth("size", 40);
-            SetColWidth("color", 80);
-            SetColWidth("gender", 60);
+            SetColWidth("size", 50);
+            SetColWidth("color", 70);
+            SetColWidth("gender", 80);
             SetColWidth("price", 90);
-            SetColWidth("stock", 50);
+            SetColWidth("stock", 60);
 
             // chỉ product_name được xuống dòng
             if (dgv.Columns.Contains("product_name"))
@@ -588,7 +588,7 @@ namespace FashionShop.GUI
             {
                 var colPrice = dgv.Columns["price"];
                 colPrice.DefaultCellStyle.Format = "#,##0"; // 12000 -> 12,000
-                colPrice.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
+                colPrice.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
             }
 
             SetupAutoComplete();
